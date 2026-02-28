@@ -6,13 +6,11 @@ from collections import deque
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from math import sqrt
-
 # --- Setup hand landmarker ---
 base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
 options = vision.HandLandmarkerOptions(
     base_options=base_options,
-    num_hands=4,
+    num_hands=1,
     min_hand_detection_confidence=0.5,
     min_hand_presence_confidence=0.5,
     min_tracking_confidence=0.5,
@@ -82,9 +80,9 @@ def detect_gesture(landmarks, hand_label):
     # 4: index, middle, ring, pinky extended — thumb closed
     if (not extended["thumb"] and extended["index"] and extended["middle"]
             and extended["ring"] and extended["pinky"]):
-        return "4", GREEN
+        return "", WHITE
 
-    return "", WHITE
+    return "4", GREEN
 
 
 def detect_swipe(landmarks, current_time):
@@ -195,7 +193,7 @@ while cap.isOpened():
     if not ret:
         break
 
-    frame = cv2.flip(frame, 1)
+    frame = cv2.flip(frame, 1) # @TODO unflip during demo
     h, w, _ = frame.shape
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
