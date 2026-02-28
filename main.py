@@ -80,9 +80,9 @@ def detect_gesture(landmarks, hand_label):
     # 4: index, middle, ring, pinky extended — thumb closed
     if (not extended["thumb"] and extended["index"] and extended["middle"]
             and extended["ring"] and extended["pinky"]):
-        return "", WHITE
+        return "4", GREEN
 
-    return "4", GREEN
+    return "", WHITE
 
 
 def detect_swipe(landmarks, current_time):
@@ -124,6 +124,18 @@ def detect_swipe(landmarks, current_time):
     return swipe
 
 
+def get_hand_scale(landmarks, w, h, reference_size=150):
+    """Calculate a scale factor based on how large the hand appears on screen."""
+    wrist = landmarks[0]
+    middle_mcp = landmarks[9]
+
+    dx = (wrist.x - middle_mcp.x) * w
+    dy = (wrist.y - middle_mcp.y) * h
+    hand_size = (dx**2 + dy**2) ** 0.5
+
+    return max(0.3, min(2.0, hand_size / reference_size))
+
+
 def get_bounding_box(landmarks, w, h, padding=20):
     x_coords = [lm.x * w for lm in landmarks]
     y_coords = [lm.y * h for lm in landmarks]
@@ -151,13 +163,17 @@ def draw_hand(img, landmarks, handedness, w, h, gesture, gesture_color):
         pt2 = (int(p2.x * w), int(p2.y * h))
         cv2.line(img, pt1, pt2, YELLOW, 2)
 
+    scale = get_hand_scale(landmarks, w, h)
+
     for i, lm in enumerate(landmarks):
         cx, cy = int(lm.x * w), int(lm.y * h)
         if i in FINGERTIPS:
-            cv2.circle(img, (cx, cy), 8, RED, -1)
-            cv2.circle(img, (cx, cy), 8, WHITE, 2)
+            radius = max(1, int(8 * scale))
+            cv2.circle(img, (cx, cy), radius, RED, -1)
+            cv2.circle(img, (cx, cy), radius, WHITE, 2)
         else:
-            cv2.circle(img, (cx, cy), 5, BLUE, -1)
+            radius = max(1, int(5 * scale))
+            cv2.circle(img, (cx, cy), radius, BLUE, -1)
 
 
 def draw_swipe_indicator(img, swipe, w, h):
@@ -207,12 +223,12 @@ while cap.isOpened():
             hand_label = handedness[0].category_name
             gesture, color = detect_gesture(landmarks, hand_label)
             draw_hand(frame, landmarks, handedness, w, h, gesture, color)
-            swipe = detect_swipe(landmarks, now)
-            
+
             if gesture == "4":
                 swipe = detect_swipe(landmarks, now)
             else:
                 wrist_history.clear()
+
     if swipe or (last_swipe and now - last_swipe_time < 0.6):
         draw_swipe_indicator(frame, swipe or last_swipe, w, h)
 
