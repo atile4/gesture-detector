@@ -1,5 +1,7 @@
 import mediapipe as mp
 import cv2
+import time
+from collections import deque
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -15,24 +17,155 @@ options = vision.HandLandmarkerOptions(
 )
 detector = vision.HandLandmarker.create_from_options(options)
 
-# Hand connections (pairs of landmark indices)
+# Hand connections
 HAND_CONNECTIONS = [
-    (0,1),(1,2),(2,3),(3,4),       # thumb
-    (0,5),(5,6),(6,7),(7,8),       # index
-    (0,9),(9,10),(10,11),(11,12),  # middle
-    (0,13),(13,14),(14,15),(15,16),# ring
-    (0,17),(17,18),(18,19),(19,20),# pinky
-    (5,9),(9,13),(13,17),          # palm
+    (0,1),(1,2),(2,3),(3,4),
+    (0,5),(5,6),(6,7),(7,8),
+    (0,9),(9,10),(10,11),(11,12),
+    (0,13),(13,14),(14,15),(15,16),
+    (0,17),(17,18),(18,19),(19,20),
+    (5,9),(9,13),(13,17),
 ]
-
 FINGERTIPS = {4, 8, 12, 16, 20}
 
-# Colors (BGR)
+# Colors
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 BLUE = (255, 0, 0)
 YELLOW = (0, 255, 255)
 WHITE = (255, 255, 255)
+ORANGE = (0, 165, 255)
+PURPLE = (255, 0, 128)
+
+# --- Swipe tracking ---
+SWIPE_HISTORY_SIZE = 15
+SWIPE_MIN_DISTANCE = 0.15  # normalized distance threshold
+SWIPE_TIME_WINDOW = 0.5    # seconds
+wrist_history = deque(maxlen=SWIPE_HISTORY_SIZE)
+last_swipe = ""
+last_swipe_time = 0
+SWIPE_COOLDOWN = 0.8  # seconds before detecting a new swipe
+
+
+def is_finger_extended(landmarks, finger):
+    """Check if a finger is extended (tip above pip joint)."""
+    # Landmark indices: [tip, dip, pip, mcp]
+    fingers = {
+        "thumb":  [4, 3, 2, 1],
+        "index":  [8, 7, 6, 5],
+        "middle": [12, 11, 10, 9],
+        "ring":   [16, 15, 14, 13],
+        "pinky":  [20, 19, 18, 17],
+    }
+    tip, dip, pip_, mcp = [landmarks[i] for i in fingers[finger]]
+
+    if finger == "thumb":
+        # Thumb: compare x distance from wrist instead of y
+        wrist = landmarks[0]
+        return abs(tip.x - wrist.x) > abs(mcp.x - wrist.x)
+    else:
+        # Other fingers: tip is above pip (lower y = higher on screen)
+        return tip.y < pip_.y
+
+
+def detect_gesture(landmarks):
+    """Detect static hand gestures based on finger positions."""
+    extended = {
+        "thumb":  is_finger_extended(landmarks, "thumb"),
+        "index":  is_finger_extended(landmarks, "index"),
+        "middle": is_finger_extended(landmarks, "middle"),
+        "ring":   is_finger_extended(landmarks, "ring"),
+        "pinky":  is_finger_extended(landmarks, "pinky"),
+    }
+
+    count = sum(extended.values())
+
+    # Peace sign: index + middle extended, others closed
+    if (extended["index"] and extended["middle"]
+            and not extended["ring"] and not extended["pinky"]):
+        if not extended["thumb"]:
+            return "Peace", PURPLE
+        return "Peace", PURPLE
+
+    # Thumbs up: only thumb extended
+    if (extended["thumb"] and not extended["index"]
+            and not extended["middle"] and not extended["ring"]
+            and not extended["pinky"]):
+        return "Thumbs Up", GREEN
+
+    # Thumbs down: only thumb, and thumb tip is below thumb mcp
+    if (not extended["index"] and not extended["middle"]
+            and not extended["ring"] and not extended["pinky"]):
+        tip_y = landmarks[4].y
+        mcp_y = landmarks[2].y
+        if tip_y > mcp_y:
+            return "Thumbs Down", RED
+
+    # Fist: no fingers extended
+    if count == 0:
+        return "Fist", RED
+
+    # Open palm: all fingers extended
+    if count == 5:
+        return "Open Palm", GREEN
+
+    # Pointing: only index extended
+    if (extended["index"] and not extended["middle"]
+            and not extended["ring"] and not extended["pinky"]):
+        return "Pointing", ORANGE
+
+    # Rock/horns: index + pinky extended
+    if (extended["index"] and extended["pinky"]
+            and not extended["middle"] and not extended["ring"]):
+        return "Rock On", YELLOW
+
+    # Three fingers
+    if (extended["index"] and extended["middle"] and extended["ring"]
+            and not extended["pinky"]):
+        return "Three", ORANGE
+
+    return f"{count} Fingers", WHITE
+
+
+def detect_swipe(landmarks, current_time):
+    """Detect swipe gestures based on wrist movement over time."""
+    global last_swipe, last_swipe_time
+
+    wrist = landmarks[0]
+    wrist_history.append((wrist.x, wrist.y, current_time))
+
+    if len(wrist_history) < 5:
+        return None
+
+    # Cooldown check
+    if current_time - last_swipe_time < SWIPE_COOLDOWN:
+        return None
+
+    # Find oldest point within time window
+    oldest = None
+    for pt in wrist_history:
+        if current_time - pt[2] <= SWIPE_TIME_WINDOW:
+            oldest = pt
+            break
+
+    if oldest is None:
+        return None
+
+    dx = wrist.x - oldest[0]
+    dy = wrist.y - oldest[1]
+
+    swipe = None
+    if abs(dx) > SWIPE_MIN_DISTANCE and abs(dx) > abs(dy) * 1.5:
+        swipe = "Swipe Right" if dx > 0 else "Swipe Left"
+    elif abs(dy) > SWIPE_MIN_DISTANCE and abs(dy) > abs(dx) * 1.5:
+        swipe = "Swipe Down" if dy > 0 else "Swipe Up"
+
+    if swipe:
+        last_swipe = swipe
+        last_swipe_time = current_time
+        wrist_history.clear()
+
+    return swipe
 
 
 def get_bounding_box(landmarks, w, h, padding=20):
@@ -46,14 +179,15 @@ def get_bounding_box(landmarks, w, h, padding=20):
     )
 
 
-def draw_hand(img, landmarks, handedness, w, h):
+def draw_hand(img, landmarks, handedness, w, h, gesture, gesture_color):
     x1, y1, x2, y2 = get_bounding_box(landmarks, w, h)
-    cv2.rectangle(img, (x1, y1), (x2, y2), GREEN, 2)
+    cv2.rectangle(img, (x1, y1), (x2, y2), gesture_color, 2)
 
-    label = handedness[0].category_name
-    conf = handedness[0].score
-    cv2.putText(img, f"{label} ({conf:.0%})", (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, GREEN, 2)
+    # Label: handedness + gesture
+    hand_label = handedness[0].category_name
+    text = f"{hand_label}: {gesture}"
+    cv2.putText(img, text, (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, gesture_color, 2)
 
     # Draw connections
     for c in HAND_CONNECTIONS:
@@ -73,6 +207,31 @@ def draw_hand(img, landmarks, handedness, w, h):
             cv2.circle(img, (cx, cy), 5, BLUE, -1)
 
 
+def draw_swipe_indicator(img, swipe, w, h):
+    """Draw a big swipe arrow/text on screen."""
+    if not swipe:
+        return
+
+    center_x, center_y = w // 2, h // 2
+    arrow_len = 100
+
+    if "Left" in swipe:
+        cv2.arrowedLine(img, (center_x + arrow_len, center_y),
+                        (center_x - arrow_len, center_y), ORANGE, 4, tipLength=0.3)
+    elif "Right" in swipe:
+        cv2.arrowedLine(img, (center_x - arrow_len, center_y),
+                        (center_x + arrow_len, center_y), ORANGE, 4, tipLength=0.3)
+    elif "Up" in swipe:
+        cv2.arrowedLine(img, (center_x, center_y + arrow_len),
+                        (center_x, center_y - arrow_len), ORANGE, 4, tipLength=0.3)
+    elif "Down" in swipe:
+        cv2.arrowedLine(img, (center_x, center_y - arrow_len),
+                        (center_x, center_y + arrow_len), ORANGE, 4, tipLength=0.3)
+
+    cv2.putText(img, swipe, (center_x - 80, center_y - arrow_len - 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, ORANGE, 3)
+
+
 # --- Webcam loop ---
 cap = cv2.VideoCapture(0)
 
@@ -85,20 +244,40 @@ while cap.isOpened():
     h, w, _ = frame.shape
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    now = time.time()
 
     result = detector.detect(mp_image)
 
+    swipe = None
     if result.hand_landmarks:
         for landmarks, handedness in zip(result.hand_landmarks, result.handedness):
-            draw_hand(frame, landmarks, handedness, w, h)
+            gesture, color = detect_gesture(landmarks)
+            draw_hand(frame, landmarks, handedness, w, h, gesture, color)
+            swipe = detect_swipe(landmarks, now)
 
+    # Show swipe indicator (persists briefly after detection)
+    if swipe or (last_swipe and now - last_swipe_time < 0.6):
+        draw_swipe_indicator(frame, swipe or last_swipe, w, h)
+
+    # HUD
     num = len(result.hand_landmarks) if result.hand_landmarks else 0
-    cv2.putText(frame, f"Hands detected: {num}", (10, 30),
+    cv2.putText(frame, f"Hands: {num}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
-    cv2.putText(frame, "Press Q to quit", (10, h - 20),
+
+    # Gesture legend
+    legend = [
+        "Gestures: Peace | Thumbs Up/Down | Fist",
+        "Open Palm | Pointing | Rock On | Three",
+        "Swipe: Move hand L/R/U/D quickly",
+    ]
+    for i, line in enumerate(legend):
+        cv2.putText(frame, line, (10, h - 60 + i * 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, WHITE, 1)
+
+    cv2.putText(frame, "Press Q to quit", (w - 170, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE, 1)
 
-    cv2.imshow("Hand Detection", frame)
+    cv2.imshow("Gesture Detection", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
