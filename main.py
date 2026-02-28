@@ -49,12 +49,13 @@ last_swipe = ""
 last_swipe_time = 0
 SWIPE_COOLDOWN = 0.8
 
-# --- Scroll settings ---
+# --- Scroll settings ---   
 SCROLL_AMOUNT = 500
 
 # --- Mouse control settings ---
 SCREEN_W, SCREEN_H = pyautogui.size()
-MOUSE_SMOOTHING = 5  # lower = more responsive, higher = smoother
+MOUSE_SENSITIVITY = 1.5  # increase to move cursor faster, decrease to slow it down
+zot_prev_pos = None
 
 
 def dist(a, b):
@@ -96,7 +97,7 @@ def detect_gesture(landmarks, hand_label):
         thumb_tip  = landmarks[4]
         middle_tip = landmarks[12]
         ring_tip   = landmarks[16]
-        ZOT_THRESHOLD = 0.07
+        ZOT_THRESHOLD = 0.04
         if (dist(thumb_tip, middle_tip) < ZOT_THRESHOLD and
                 dist(thumb_tip, ring_tip) < ZOT_THRESHOLD and
                 dist(middle_tip, ring_tip) < ZOT_THRESHOLD):
@@ -107,7 +108,6 @@ def detect_gesture(landmarks, hand_label):
             and extended["ring"] and extended["pinky"]):
             return "", WHITE
     return "4", GREEN
-    
 
 
 def detect_swipe(landmarks, current_time):
@@ -162,7 +162,9 @@ def handle_swipe_action(swipe):
 
 
 def handle_zot_mouse(landmarks):
-    """Move the mouse to the midpoint of the thumb, middle, and ring fingertips."""
+    """Move the mouse relative to how much the hand has moved since last frame."""
+    global zot_prev_pos
+
     thumb_tip  = landmarks[4]
     middle_tip = landmarks[12]
     ring_tip   = landmarks[16]
@@ -170,10 +172,16 @@ def handle_zot_mouse(landmarks):
     avg_x = (thumb_tip.x + middle_tip.x + ring_tip.x) / 3
     avg_y = (thumb_tip.y + middle_tip.y + ring_tip.y) / 3
 
-    target_x = int(avg_x * SCREEN_W)
-    target_y = int(avg_y * SCREEN_H)
+    if zot_prev_pos is not None:
+        dx = avg_x - zot_prev_pos[0]
+        dy = avg_y - zot_prev_pos[1]
 
-    pyautogui.moveTo(target_x, target_y, duration=MOUSE_SMOOTHING / 100)
+        move_x = int(dx * SCREEN_W * MOUSE_SENSITIVITY)
+        move_y = int(dy * SCREEN_H * MOUSE_SENSITIVITY)
+
+        pyautogui.moveRel(move_x, move_y)
+
+    zot_prev_pos = (avg_x, avg_y)
 
 
 def get_hand_scale(landmarks, w, h, reference_size=150):
@@ -285,6 +293,7 @@ while cap.isOpened():
                 handle_zot_mouse(landmarks)
             else:
                 wrist_history.clear()
+                zot_prev_pos = None  # reset when zot is not active
 
     # If a swipe was detected, send the scroll command
     if swipe:
