@@ -1,10 +1,14 @@
 import mediapipe as mp
 import cv2
 import time
+import pyautogui
 from collections import deque
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
+# Prevent pyautogui from throwing errors at screen corners
+pyautogui.FAILSAFE = False
 
 # --- Setup hand landmarker ---
 base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
@@ -24,7 +28,6 @@ HAND_CONNECTIONS = [
     (0,9),(9,10),(10,11),(11,12),
     (0,13),(13,14),(14,15),(15,16),
     (0,17),(17,18),(18,19),(19,20),
-    (5,9),(9,13),(13,17),
 ]
 FINGERTIPS = {4, 8, 12, 16, 20}
 
@@ -46,8 +49,13 @@ last_swipe = ""
 last_swipe_time = 0
 SWIPE_COOLDOWN = 0.8
 
+# --- Scroll settings ---
+SCROLL_AMOUNT = 500  # how many units to scroll per swipe
+
+
 def dist(a, b):
     return ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
+
 
 def is_finger_extended(landmarks, finger, hand_label):
     fingers = {
@@ -62,15 +70,15 @@ def is_finger_extended(landmarks, finger, hand_label):
     if finger == "thumb":
         index_mcp = landmarks[5]
         if hand_label == "Right":
-            return tip.x < index_mcp.x  # right thumb extends to the left
+            return tip.x < index_mcp.x
         else:
-            return tip.x > index_mcp.x  # left thumb extends to the right
+            return tip.x > index_mcp.x
     else:
         return tip.y < pip_.y
 
 
 def detect_gesture(landmarks, hand_label):
-    """Detect only the 4-finger gesture."""
+    """Detect the 4-finger gesture and the zot gesture."""
     extended = {
         "thumb":  is_finger_extended(landmarks, "thumb", hand_label),
         "index":  is_finger_extended(landmarks, "index", hand_label),
@@ -79,12 +87,12 @@ def detect_gesture(landmarks, hand_label):
         "pinky":  is_finger_extended(landmarks, "pinky", hand_label),
     }
 
-        # Zot: index + pinky extended, thumb/middle/ring tips all close together
+    # Zot: index + pinky extended, thumb/middle/ring tips all close together
     if extended["index"] and extended["pinky"]:
         thumb_tip  = landmarks[4]
         middle_tip = landmarks[12]
         ring_tip   = landmarks[16]
-        ZOT_THRESHOLD = 0.07  # normalized distance — tune if needed
+        ZOT_THRESHOLD = 0.07
         if (dist(thumb_tip, middle_tip) < ZOT_THRESHOLD and
                 dist(thumb_tip, ring_tip) < ZOT_THRESHOLD and
                 dist(middle_tip, ring_tip) < ZOT_THRESHOLD):
@@ -94,8 +102,8 @@ def detect_gesture(landmarks, hand_label):
     if (not extended["thumb"] and extended["index"] and extended["middle"]
             and extended["ring"] and extended["pinky"]):
         return "", WHITE
-
     return "4", GREEN
+    
 
 
 def detect_swipe(landmarks, current_time):
@@ -135,6 +143,18 @@ def detect_swipe(landmarks, current_time):
         wrist_history.clear()
 
     return swipe
+
+
+def handle_swipe_action(swipe):
+    """Translate a swipe into a scroll command."""
+    if swipe == "Swipe Up":
+        pyautogui.scroll(SCROLL_AMOUNT)
+    elif swipe == "Swipe Down":
+        pyautogui.scroll(-SCROLL_AMOUNT)
+    elif swipe == "Swipe Left":
+        pyautogui.scroll(-SCROLL_AMOUNT)
+    elif swipe == "Swipe Right":
+        pyautogui.scroll(SCROLL_AMOUNT)
 
 
 def get_hand_scale(landmarks, w, h, reference_size=150):
@@ -242,6 +262,10 @@ while cap.isOpened():
             else:
                 wrist_history.clear()
 
+    # If a swipe was detected, send the scroll command
+    if swipe:
+        handle_swipe_action(swipe)
+
     if swipe or (last_swipe and now - last_swipe_time < 0.6):
         draw_swipe_indicator(frame, swipe or last_swipe, w, h)
 
@@ -250,11 +274,12 @@ while cap.isOpened():
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
 
     legend = [
-        "Gesture: 4 (index, middle, ring, pinky extended)",
-        "Swipe: Move hand L/R/U/D quickly",
+        "4: index+middle+ring+pinky extended, thumb closed",
+        "Zot: index+pinky extended, thumb+middle+ring pinched",
+        "Swipe: Hold 4 and move hand L/R/U/D quickly",
     ]
     for i, line in enumerate(legend):
-        cv2.putText(frame, line, (10, h - 40 + i * 20),
+        cv2.putText(frame, line, (10, h - 60 + i * 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, WHITE, 1)
 
     cv2.putText(frame, "Press Q to quit", (w - 170, 30),
