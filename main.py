@@ -6,11 +6,13 @@ from collections import deque
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from math import sqrt
+
 # --- Setup hand landmarker ---
 base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
 options = vision.HandLandmarkerOptions(
     base_options=base_options,
-    num_hands=2,
+    num_hands=4,
     min_hand_detection_confidence=0.5,
     min_hand_presence_confidence=0.5,
     min_tracking_confidence=0.5,
@@ -47,8 +49,7 @@ last_swipe_time = 0
 SWIPE_COOLDOWN = 0.8
 
 
-def is_finger_extended(landmarks, finger):
-    """Check if a finger is extended (tip above pip joint)."""
+def is_finger_extended(landmarks, finger, hand_label):
     fingers = {
         "thumb":  [4, 3, 2, 1],
         "index":  [8, 7, 6, 5],
@@ -59,20 +60,23 @@ def is_finger_extended(landmarks, finger):
     tip, dip, pip_, mcp = [landmarks[i] for i in fingers[finger]]
 
     if finger == "thumb":
-        wrist = landmarks[0]
-        return abs(tip.x - wrist.x) > abs(mcp.x - wrist.x)
+        index_mcp = landmarks[5]
+        if hand_label == "Right":
+            return tip.x < index_mcp.x  # right thumb extends to the left
+        else:
+            return tip.x > index_mcp.x  # left thumb extends to the right
     else:
         return tip.y < pip_.y
 
 
-def detect_gesture(landmarks):
+def detect_gesture(landmarks, hand_label):
     """Detect only the 4-finger gesture."""
     extended = {
-        "thumb":  is_finger_extended(landmarks, "thumb"),
-        "index":  is_finger_extended(landmarks, "index"),
-        "middle": is_finger_extended(landmarks, "middle"),
-        "ring":   is_finger_extended(landmarks, "ring"),
-        "pinky":  is_finger_extended(landmarks, "pinky"),
+        "thumb":  is_finger_extended(landmarks, "thumb", hand_label),
+        "index":  is_finger_extended(landmarks, "index", hand_label),
+        "middle": is_finger_extended(landmarks, "middle", hand_label),
+        "ring":   is_finger_extended(landmarks, "ring", hand_label),
+        "pinky":  is_finger_extended(landmarks, "pinky", hand_label),
     }
 
     # 4: index, middle, ring, pinky extended — thumb closed
@@ -202,10 +206,15 @@ while cap.isOpened():
     swipe = None
     if result.hand_landmarks:
         for landmarks, handedness in zip(result.hand_landmarks, result.handedness):
-            gesture, color = detect_gesture(landmarks)
+            hand_label = handedness[0].category_name
+            gesture, color = detect_gesture(landmarks, hand_label)
             draw_hand(frame, landmarks, handedness, w, h, gesture, color)
             swipe = detect_swipe(landmarks, now)
-
+            
+            if gesture == "4":
+                swipe = detect_swipe(landmarks, now)
+            else:
+                wrist_history.clear()
     if swipe or (last_swipe and now - last_swipe_time < 0.6):
         draw_swipe_indicator(frame, swipe or last_swipe, w, h)
 
