@@ -46,6 +46,8 @@ last_swipe = ""
 last_swipe_time = 0
 SWIPE_COOLDOWN = 0.8
 
+def dist(a, b):
+    return ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
 
 def is_finger_extended(landmarks, finger, hand_label):
     fingers = {
@@ -77,12 +79,23 @@ def detect_gesture(landmarks, hand_label):
         "pinky":  is_finger_extended(landmarks, "pinky", hand_label),
     }
 
+        # Zot: index + pinky extended, thumb/middle/ring tips all close together
+    if extended["index"] and extended["pinky"]:
+        thumb_tip  = landmarks[4]
+        middle_tip = landmarks[12]
+        ring_tip   = landmarks[16]
+        ZOT_THRESHOLD = 0.07  # normalized distance — tune if needed
+        if (dist(thumb_tip, middle_tip) < ZOT_THRESHOLD and
+                dist(thumb_tip, ring_tip) < ZOT_THRESHOLD and
+                dist(middle_tip, ring_tip) < ZOT_THRESHOLD):
+            return "Zot", YELLOW
+
     # 4: index, middle, ring, pinky extended — thumb closed
     if (not extended["thumb"] and extended["index"] and extended["middle"]
             and extended["ring"] and extended["pinky"]):
-        return "4", GREEN
+        return "", WHITE
 
-    return "", WHITE
+    return "4", GREEN
 
 
 def detect_swipe(landmarks, current_time):
