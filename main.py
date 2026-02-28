@@ -50,7 +50,11 @@ last_swipe_time = 0
 SWIPE_COOLDOWN = 0.8
 
 # --- Scroll settings ---
-SCROLL_AMOUNT = 500  # how many units to scroll per swipe
+SCROLL_AMOUNT = 500
+
+# --- Mouse control settings ---
+SCREEN_W, SCREEN_H = pyautogui.size()
+MOUSE_SMOOTHING = 5  # lower = more responsive, higher = smoother
 
 
 def dist(a, b):
@@ -101,7 +105,7 @@ def detect_gesture(landmarks, hand_label):
     # 4: index, middle, ring, pinky extended — thumb closed
     if (not extended["thumb"] and extended["index"] and extended["middle"]
             and extended["ring"] and extended["pinky"]):
-        return "", WHITE
+            return "", WHITE
     return "4", GREEN
     
 
@@ -155,6 +159,21 @@ def handle_swipe_action(swipe):
         pyautogui.scroll(-SCROLL_AMOUNT)
     elif swipe == "Swipe Right":
         pyautogui.scroll(SCROLL_AMOUNT)
+
+
+def handle_zot_mouse(landmarks):
+    """Move the mouse to the midpoint of the thumb, middle, and ring fingertips."""
+    thumb_tip  = landmarks[4]
+    middle_tip = landmarks[12]
+    ring_tip   = landmarks[16]
+
+    avg_x = (thumb_tip.x + middle_tip.x + ring_tip.x) / 3
+    avg_y = (thumb_tip.y + middle_tip.y + ring_tip.y) / 3
+
+    target_x = int(avg_x * SCREEN_W)
+    target_y = int(avg_y * SCREEN_H)
+
+    pyautogui.moveTo(target_x, target_y, duration=MOUSE_SMOOTHING / 100)
 
 
 def get_hand_scale(landmarks, w, h, reference_size=150):
@@ -236,6 +255,8 @@ def draw_swipe_indicator(img, swipe, w, h):
 
 # --- Webcam loop ---
 cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -244,7 +265,8 @@ while cap.isOpened():
 
     frame = cv2.flip(frame, 1) # @TODO unflip during demo
     h, w, _ = frame.shape
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    small = cv2.resize(frame, (640, 360))
+    rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
     now = time.time()
 
@@ -259,6 +281,8 @@ while cap.isOpened():
 
             if gesture == "4":
                 swipe = detect_swipe(landmarks, now)
+            elif gesture == "Zot":
+                handle_zot_mouse(landmarks)
             else:
                 wrist_history.clear()
 
@@ -274,8 +298,8 @@ while cap.isOpened():
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
 
     legend = [
-        "4: index+middle+ring+pinky extended, thumb closed",
-        "Zot: index+pinky extended, thumb+middle+ring pinched",
+        "4: index+middle+ring+pinky extended, thumb closed — swipe to scroll",
+        "Zot: index+pinky extended, thumb+middle+ring pinched — moves cursor",
         "Swipe: Hold 4 and move hand L/R/U/D quickly",
     ]
     for i, line in enumerate(legend):
