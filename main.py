@@ -133,17 +133,13 @@ def draw_hand(img, landmarks, handedness, w, h, gesture, gesture_color):
         pt1 = (int(landmarks[c[0]].x * w), int(landmarks[c[0]].y * h))
         pt2 = (int(landmarks[c[1]].x * w), int(landmarks[c[1]].y * h))
         cv2.line(img, pt1, pt2, YELLOW, 2)
-
-    scale = analyzer.calc_distance(landmarks, w, h)
     for i, lm in enumerate(landmarks):
         cx, cy = int(lm.x * w), int(lm.y * h)
         if i in FINGERTIPS:
-            radius = max(1, int(8 * scale))
-            cv2.circle(img, (cx, cy), radius, RED, -1)
-            cv2.circle(img, (cx, cy), radius, WHITE, 2)
+            cv2.circle(img, (cx, cy), 8, RED, -1)
+            cv2.circle(img, (cx, cy), 8, WHITE, 2)
         else:
-            radius = max(1, int(5 * scale))
-            cv2.circle(img, (cx, cy), radius, BLUE, -1)
+            cv2.circle(img, (cx, cy), 5, BLUE, -1)
 
 
 def draw_swipe_indicator(img, swipe, w, h):
@@ -166,7 +162,6 @@ def draw_swipe_indicator(img, swipe, w, h):
 # --- Main loop ---
 def main():
     global zot_prev_pos
-
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -176,7 +171,7 @@ def main():
         if not ret:
             break
 
-        frame = cv2.flip(frame, 1)  # @TODO unflip during demo
+        frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
 
         # Downscale for detection, draw on full frame
@@ -193,12 +188,11 @@ def main():
                 analyzer.update_state(landmarks, w, h)
                 hand_state = analyzer.get_state()
 
-                draw_hand(frame, landmarks, handedness, w, h,
-                          hand_state.gesture, hand_state.color)
+                draw_hand(frame, landmarks, handedness, w, h, hand_state.gesture, hand_state.color)
 
                 if hand_state.gesture == "4":
                     swipe = detect_swipe(landmarks, now)
-                    zot_prev_pos = None          # reset zot state when not active
+                    zot_prev_pos = None          # reset zot whenever it's not active
                     zot_position_history.clear()
                 elif hand_state.gesture == "Zot":
                     handle_zot_mouse(landmarks)
@@ -234,7 +228,6 @@ def main():
 
     cap.release()
     cv2.destroyAllWindows()
-
 
 if __name__ == '__main__':
     main()
