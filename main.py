@@ -102,6 +102,7 @@ def draw_swipe_indicator(img, swipe, w, h):
 def main():
     cap = cv2.VideoCapture(0)
 
+    hand_analyzer = HandAnalyzer()
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -116,7 +117,6 @@ def main():
 
         swipe = None
 
-        hand_analyzer = HandAnalyzer()
         if result.hand_landmarks:
             for landmarks, handedness in zip(result.hand_landmarks, result.handedness):
                 hand_analyzer.update_state(landmarks, w, h)

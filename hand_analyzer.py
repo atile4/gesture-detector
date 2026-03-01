@@ -1,8 +1,9 @@
 import math
-from collections import namedtuple
+from collections import namedtuple, deque
 
 FINGERTIPS = {4, 8, 12, 16, 20}
-HandState = namedtuple ("HandState", ["gesture", "color", "openness", "distance_from_cam"])
+HandState = namedtuple ("HandState", ["gesture", "color", "openness", "distance_from_cam"
+                                      , "openness_history"])
 
 class HandAnalyzer:
     """Extracts per-hand properties from a list of MediaPipe NormalizedLandmark."""
@@ -13,9 +14,11 @@ class HandAnalyzer:
         self._openness = None
         self._distance_from_cam = None
 
+        self._openness_history = deque(maxlen = 10) # previous 5 openness measurements
+
     # ------------------------------------------------------------------ #
     #  Internal helpers                                                    #
-    # ------------------------------------------------------------------ #
+    # -----------------------------f------------------------------------- #
 
     @staticmethod
     def _dist(p1, p2) -> float:
@@ -45,9 +48,13 @@ class HandAnalyzer:
         self._openness = self.calc_fist_openness(landmarks)
         self._distance_from_cam = self.calc_distance(landmarks, cam_length, cam_width)
 
+
+        self._openness_history.append(self._openness)
+
     def get_state(self):
         return HandState(gesture=self._gesture, color = self._color,
-                         openness = self._openness, distance_from_cam = self._distance_from_cam)
+                         openness = self._openness, distance_from_cam = self._distance_from_cam,
+                         openness_history = self._openness_history)
 
     def calc_extended_fingers(self, landmarks) -> dict[str, bool]:
         """Returns which fingers are extended."""
@@ -93,6 +100,7 @@ class HandAnalyzer:
 
         avg = sum(self._dist(wrist, landmarks[i]) for i in [4, 8, 12, 16, 20]) / 5
         raw = avg / ref
+
         return max(0.0, min(1.0, (raw - 0.8) / (1.5 - 0.8)))
 
     def calc_distance(self, landmarks, frame_w: int, frame_h: int,
