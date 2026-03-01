@@ -189,11 +189,11 @@ def inference_process(shm_frame, frame_counter, stop_flag, result_queue):
 
 zoom_prev_pos = None
 
-def handle_zoom(lm):
+def handle_zoom(lm_flat):
     """Zoom by sending Ctrl+scroll based on vertical hand movement."""
     global zoom_prev_pos
 
-    wy = lm[0].y  # wrist y position
+    wy = lm_flat[1]  # wrist y position
 
     if zoom_prev_pos is not None:
         dy = wy - zoom_prev_pos
