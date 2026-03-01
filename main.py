@@ -1,6 +1,7 @@
 import mediapipe as mp
 import cv2
 import time
+import pyautogui
 from collections import deque
 
 from mediapipe.tasks import python
@@ -9,13 +10,24 @@ from mediapipe.tasks.python import vision
 from hand_analyzer import HandAnalyzer, FINGERTIPS
 from colors import *
 
+# Prevent pyautogui from throwing errors at screen corners
+pyautogui.FAILSAFE = False
+
 analyzer = HandAnalyzer()
+
+# --- Mouse control settings ---
+SCREEN_W, SCREEN_H = pyautogui.size()
+MOUSE_SENSITIVITY = 1.5
+zot_prev_pos = None
+
+# --- Scroll settings ---
+SCROLL_AMOUNT = 500
 
 # --- Setup hand landmarker ---
 base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
 options = vision.HandLandmarkerOptions(
     base_options=base_options,
-    num_hands=2,
+    num_hands=1,
     min_hand_detection_confidence=0.5,
     min_hand_presence_confidence=0.5,
     min_tracking_confidence=0.5,
@@ -55,6 +67,34 @@ def detect_swipe(landmarks, current_time):
         last_swipe, last_swipe_time = swipe, current_time
         wrist_history.clear()
     return swipe
+
+
+def handle_swipe_action(swipe):
+    """Translate a swipe into a scroll command."""
+    if swipe == "Swipe Up":
+        pyautogui.scroll(SCROLL_AMOUNT)
+    elif swipe == "Swipe Down":
+        pyautogui.scroll(-SCROLL_AMOUNT)
+    elif swipe == "Swipe Left":
+        pyautogui.scroll(-SCROLL_AMOUNT)
+    elif swipe == "Swipe Right":
+        pyautogui.scroll(SCROLL_AMOUNT)
+
+
+def handle_zot_mouse(landmarks):
+    """Move the mouse relative to how much the hand has moved since last frame."""
+    global zot_prev_pos
+    thumb_tip  = landmarks[4]
+    middle_tip = landmarks[12]
+    ring_tip   = landmarks[16]
+    avg_x = (thumb_tip.x + middle_tip.x + ring_tip.x) / 3
+    avg_y = (thumb_tip.y + middle_tip.y + ring_tip.y) / 3
+    if zot_prev_pos is not None:
+        dx = avg_x - zot_prev_pos[0]
+        dy = avg_y - zot_prev_pos[1]
+        pyautogui.moveRel(int(dx * SCREEN_W * MOUSE_SENSITIVITY),
+                          int(dy * SCREEN_H * MOUSE_SENSITIVITY))
+    zot_prev_pos = (avg_x, avg_y)
 
 
 def draw_hand(img, landmarks, handedness, w, h, gesture, gesture_color):
@@ -100,7 +140,10 @@ def draw_swipe_indicator(img, swipe, w, h):
 
 # --- Main loop ---
 def main():
+    global zot_prev_pos
     cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -109,23 +152,33 @@ def main():
 
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
+
+        # Downscale for detection, draw on full frame
+        small = cv2.resize(frame, (640, 360))
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB,
-                            data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                            data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
         now = time.time()
         result = detector.detect(mp_image)
 
         swipe = None
 
-        hand_analyzer = HandAnalyzer()
         if result.hand_landmarks:
             for landmarks, handedness in zip(result.hand_landmarks, result.handedness):
-                hand_analyzer.update_state(landmarks, w, h)
-
-                hand_state = hand_analyzer.get_state()
-                print(hand_state)
+                analyzer.update_state(landmarks, w, h)
+                hand_state = analyzer.get_state()
 
                 draw_hand(frame, landmarks, handedness, w, h, hand_state.gesture, hand_state.color)
-                swipe    = detect_swipe(landmarks, now)
+
+                if hand_state.gesture == "4":
+                    swipe = detect_swipe(landmarks, now)
+                elif hand_state.gesture == "Zot":
+                    handle_zot_mouse(landmarks)
+                else:
+                    wrist_history.clear()
+                    zot_prev_pos = None
+
+        if swipe:
+            handle_swipe_action(swipe)
 
         if swipe or (last_swipe and now - last_swipe_time < 0.6):
             draw_swipe_indicator(frame, swipe or last_swipe, w, h)
@@ -135,9 +188,9 @@ def main():
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
 
         for i, line in enumerate([
-            "Gestures: Peace | Thumbs Up/Down | Fist",
-            "Open Palm | Pointing | Rock On | Three",
-            "Swipe: Move hand L/R/U/D quickly",
+            "4: index+middle+ring+pinky extended, thumb closed — swipe to scroll",
+            "Zot: index+pinky extended, thumb+middle+ring pinched — moves cursor",
+            "Swipe: Hold 4 and move hand L/R/U/D quickly",
         ]):
             cv2.putText(frame, line, (10, h - 60 + i * 20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, WHITE, 1)
