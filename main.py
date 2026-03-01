@@ -97,6 +97,27 @@ def handle_zot_mouse(landmarks):
     zot_prev_pos = (avg_x, avg_y)
 
 
+def handle_zoom(openness_history, distance_from_cam_history):
+    if len(openness_history) < 2 or len(distance_from_cam_history) < 2:
+        return
+
+    openness = list(openness_history)
+    distance = list(distance_from_cam_history)
+
+    openness_delta = openness[-1] - openness[0]
+    distance_delta = distance[-1] - distance[0]
+
+    print(openness_delta)
+    zooming_in = openness_delta > 0.8 and distance_delta < -0.1
+    zooming_out = openness_delta < -0.8 and distance_delta > 0.1
+
+    if zooming_in:
+        pyautogui.hotkey('ctrl', '+')
+    elif zooming_out:
+        pyautogui.hotkey('ctrl', '-')
+
+
+
 def draw_hand(img, landmarks, handedness, w, h, gesture, gesture_color):
     x1, y1, x2, y2 = analyzer.calc_bounding_box(landmarks, w, h)
     cv2.rectangle(img, (x1, y1), (x2, y2), gesture_color, 2)
@@ -168,6 +189,8 @@ def main():
                 hand_state = analyzer.get_state()
 
                 draw_hand(frame, landmarks, handedness, w, h, hand_state.gesture, hand_state.color)
+
+                handle_zoom(hand_state.openness_history, hand_state.distance_from_cam_history)
 
                 if hand_state.gesture == "4":
                     swipe = detect_swipe(landmarks, now)
