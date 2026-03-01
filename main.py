@@ -340,7 +340,7 @@ def main():
                     handle_4_scroll(lm_flat)
                     zot_prev_pos = None
                 elif gesture == "Zot":
-                    handle_zot_mouse(lm)
+                    handle_zot_mouse(lm_flat)
                     scroll_prev_pos = None
                 elif gesture == "Pinky":
                     handle_zot_click(hand_data['gesture_history'])
