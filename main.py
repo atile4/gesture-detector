@@ -2,12 +2,11 @@ import multiprocessing
 import ctypes
 import numpy as np
 import cv2
-import time
 from itertools import islice
 import pyautogui
 from queue import Empty
 
-from hand_analyzer import HandAnalyzer, FINGERTIPS
+from hand_analyzer import FINGERTIPS
 from colors import *
 
 # ---------------------------------------------------------------------------
@@ -62,7 +61,7 @@ DEAD_ZONE          = 0.005
 SCROLL_SENSITIVITY = 80
 SCROLL_DEAD_ZONE   = 0.003
 
-ZOOM_SENSITIVITY = 15     # higher = faster zoom per unit of hand movement
+ZOOM_SENSITIVITY = 15     # should be 0.5 in arduino
 ZOOM_DEAD_ZONE   = 0.005
 
 # ---------------------------------------------------------------------------
