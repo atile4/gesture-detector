@@ -114,7 +114,7 @@ class HandAnalyzer:
         if idx and pink and not ring and not mid:
            return "Zot", YELLOW
            
-        if idx and mid and not ring and not pink:
+        if idx and mid and thm and not ring and not pink:
             return "Peace", PURPLE
 
         if idx and mid and ring and not pink:

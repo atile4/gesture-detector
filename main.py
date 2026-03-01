@@ -2,12 +2,11 @@ import multiprocessing
 import ctypes
 import numpy as np
 import cv2
-import time
 from itertools import islice
 import pyautogui
 from queue import Empty
 
-from hand_analyzer import HandAnalyzer, FINGERTIPS
+from hand_analyzer import FINGERTIPS
 from colors import *
 
 # ---------------------------------------------------------------------------
@@ -53,7 +52,7 @@ SCREEN_W, SCREEN_H = pyautogui.size()
 # Control settings
 # ---------------------------------------------------------------------------
 MOUSE_SENSITIVITY  = 1.5
-DEAD_ZONE          = 0.005
+DEAD_ZONE          = 0.01
 
 # Scroll: hand moves ~0.01–0.05 normalised units per frame at a natural speed.
 # SCROLL_SENSITIVITY scales that into REL_WHEEL clicks (integers).
@@ -62,7 +61,7 @@ DEAD_ZONE          = 0.005
 SCROLL_SENSITIVITY = 30
 SCROLL_DEAD_ZONE   = 0.003
 
-ZOOM_SENSITIVITY = 15     # higher = faster zoom per unit of hand movement
+ZOOM_SENSITIVITY = 0.3     # should be 0.5 in arduino
 ZOOM_DEAD_ZONE   = 0.005
 
 # ---------------------------------------------------------------------------
@@ -203,9 +202,9 @@ def handle_zoom(lm_flat):
             # hand down (dy > 0) → zoom out (negative scroll with ctrl held)
             clicks = int(-dy * ZOOM_SENSITIVITY / 0.01)  # scale to discrete clicks
             if clicks != 0:
-                pyautogui.keyDown('ctrl')
-                pyautogui.scroll(clicks)
-                pyautogui.keyUp('ctrl')
+                key = '=' if clicks > 0 else '-'
+                for _ in range(abs(clicks)):
+                    pyautogui.hotkey('command', key)
 
     zoom_prev_pos = wy
 
@@ -216,7 +215,7 @@ def handle_zoom(lm_flat):
 scroll_prev_y = None
 
 
-def handle_4_scroll(lm_flat):
+def handle_scroll(lm_flat):
     """
     Maps vertical wrist movement to integer REL_WHEEL detents.
     dy is normalised (0–1 range), so multiply by SCROLL_SENSITIVITY
@@ -228,7 +227,7 @@ def handle_4_scroll(lm_flat):
         dy = wy - scroll_prev_y
         if abs(dy) > SCROLL_DEAD_ZONE:
             # dy > 0 = hand moved down → scroll down = negative wheel
-            clicks = -round(dy * SCROLL_SENSITIVITY)
+            clicks = -round(-dy * SCROLL_SENSITIVITY)
             _scroll(clicks)
     scroll_prev_y = wy
 
@@ -271,7 +270,8 @@ def draw_hand(img, lm_flat, handedness_name, w, h, gesture, gesture_color):
     x2 = int(min(w, xy[:, 0].max() + 20))
     y2 = int(min(h, xy[:, 1].max() + 20))
     cv2.rectangle(img, (x1, y1), (x2, y2), gesture_color, 2)
-    cv2.putText(img, f"{handedness_name}: {gesture}", (x1, y1 - 10),
+    display_name = "Right" if handedness_name == "Left" else "Left"
+    cv2.putText(img, f"{display_name}: {gesture}", (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, gesture_color, 2)
 
     for (ax, ay), (bx, by) in zip(xy[_CONN_A], xy[_CONN_B]):
@@ -369,7 +369,7 @@ def main():
                           w, h, gesture, color)
 
                 if gesture == "4":
-                    handle_4_scroll(lm_flat)
+                    handle_scroll(lm_flat)
                     zot_prev_pos = None
                     zoom_prev_pos   = None
                 elif gesture == "Peace":
@@ -385,7 +385,7 @@ def main():
                 else:
                     zot_prev_pos  = None
                     scroll_prev_y = None
-                    zoom_prev_pos   = None
+                    zoom_prev_pos = None
 
             if active_gesture == "4":
                 draw_scroll_indicator(frame, w)
@@ -396,13 +396,6 @@ def main():
 
             cv2.putText(frame, f"Hands: {len(latest_hands)}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
-            for i, line in enumerate([
-                "4: index+middle+ring+pinky extended — drag up/down to scroll",
-                "Peace: index+middle — zoom (up=in, down=out)",
-                "Zot: index+pinky, others closed — moves cursor",
-            ]):
-                cv2.putText(frame, line, (10, h - 40 + i * 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, WHITE, 1)
             cv2.putText(frame, "Press Q to quit", (w - 170, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE, 1)
             cv2.imshow("Gesture Detection", frame)
