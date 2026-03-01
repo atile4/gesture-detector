@@ -3,23 +3,21 @@ import cv2
 import time
 import pyautogui
 from collections import deque
-
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
+from pynput.mouse import Controller as MouseController
 
 # Prevent pyautogui from throwing errors at screen corners
 pyautogui.FAILSAFE = False
 
 # --- Setup hand landmarker ---
-base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
-options = vision.HandLandmarkerOptions(
+base_options = mp.tasks.BaseOptions(model_asset_path="hand_landmarker.task")
+options = mp.tasks.vision.HandLandmarkerOptions(
     base_options=base_options,
     num_hands=1,
     min_hand_detection_confidence=0.5,
     min_hand_presence_confidence=0.5,
     min_tracking_confidence=0.5,
 )
-detector = vision.HandLandmarker.create_from_options(options)
+detector = mp.tasks.vision.HandLandmarker.create_from_options(options)
 
 # Hand connections
 HAND_CONNECTIONS = [
@@ -49,13 +47,18 @@ last_swipe = ""
 last_swipe_time = 0
 SWIPE_COOLDOWN = 0.8
 
-# --- Scroll settings ---   
+# --- Scroll settings ---
 SCROLL_AMOUNT = 500
 
 # --- Mouse control settings ---
 SCREEN_W, SCREEN_H = pyautogui.size()
-MOUSE_SENSITIVITY = 1.5  # increase to move cursor faster, decrease to slow it down
+MOUSE_SENSITIVITY = 1.5
+DEAD_ZONE = 0.005          # ignore movements smaller than this to reduce jitter
+ZOT_SMOOTH_FRAMES = 5      # number of frames to average position over
+
+mouse = MouseController()
 zot_prev_pos = None
+zot_position_history = deque(maxlen=ZOT_SMOOTH_FRAMES)
 
 
 def dist(a, b):
@@ -106,8 +109,10 @@ def detect_gesture(landmarks, hand_label):
     # 4: index, middle, ring, pinky extended — thumb closed
     if (not extended["thumb"] and extended["index"] and extended["middle"]
             and extended["ring"] and extended["pinky"]):
-            return "", WHITE
+        return "", WHITE
+        # return "4", GREEN
     return "4", GREEN
+    # return "", WHITE
 
 
 def detect_swipe(landmarks, current_time):
@@ -162,7 +167,7 @@ def handle_swipe_action(swipe):
 
 
 def handle_zot_mouse(landmarks):
-    """Move the mouse relative to how much the hand has moved since last frame."""
+    """Move the mouse relative to hand movement with smoothing and dead zone."""
     global zot_prev_pos
 
     thumb_tip  = landmarks[4]
@@ -172,16 +177,24 @@ def handle_zot_mouse(landmarks):
     avg_x = (thumb_tip.x + middle_tip.x + ring_tip.x) / 3
     avg_y = (thumb_tip.y + middle_tip.y + ring_tip.y) / 3
 
+    # Add to rolling average history
+    zot_position_history.append((avg_x, avg_y))
+
+    # Smooth position over last N frames
+    smoothed_x = sum(p[0] for p in zot_position_history) / len(zot_position_history)
+    smoothed_y = sum(p[1] for p in zot_position_history) / len(zot_position_history)
+
     if zot_prev_pos is not None:
-        dx = avg_x - zot_prev_pos[0]
-        dy = avg_y - zot_prev_pos[1]
+        dx = smoothed_x - zot_prev_pos[0]
+        dy = smoothed_y - zot_prev_pos[1]
 
-        move_x = int(dx * SCREEN_W * MOUSE_SENSITIVITY)
-        move_y = int(dy * SCREEN_H * MOUSE_SENSITIVITY)
+        # Only move if outside the dead zone
+        if abs(dx) > DEAD_ZONE or abs(dy) > DEAD_ZONE:
+            move_x = int(dx * SCREEN_W * MOUSE_SENSITIVITY)
+            move_y = int(dy * SCREEN_H * MOUSE_SENSITIVITY)
+            mouse.move(move_x, move_y)  # pynput is faster than pyautogui
 
-        pyautogui.moveRel(move_x, move_y)
-
-    zot_prev_pos = (avg_x, avg_y)
+    zot_prev_pos = (smoothed_x, smoothed_y)
 
 
 def get_hand_scale(landmarks, w, h, reference_size=150):
@@ -289,11 +302,14 @@ while cap.isOpened():
 
             if gesture == "4":
                 swipe = detect_swipe(landmarks, now)
+                zot_prev_pos = None
+                zot_position_history.clear()
             elif gesture == "Zot":
                 handle_zot_mouse(landmarks)
             else:
                 wrist_history.clear()
-                zot_prev_pos = None  # reset when zot is not active
+                zot_prev_pos = None
+                zot_position_history.clear()
 
     # If a swipe was detected, send the scroll command
     if swipe:
