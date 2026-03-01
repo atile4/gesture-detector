@@ -59,7 +59,7 @@ DEAD_ZONE          = 0.005
 # SCROLL_SENSITIVITY scales that into REL_WHEEL clicks (integers).
 # REL_WHEEL=1 is one detent on a standard scroll wheel.
 # A value of 30 means a full hand sweep (~0.3 units) produces 9 wheel clicks.
-SCROLL_SENSITIVITY = 80
+SCROLL_SENSITIVITY = 30
 SCROLL_DEAD_ZONE   = 0.003
 
 ZOOM_SENSITIVITY = 15     # higher = faster zoom per unit of hand movement
