@@ -216,7 +216,7 @@ def handle_zoom(lm_flat):
 scroll_prev_y = None
 
 
-def handle_4_scroll(lm_flat):
+def handle_scroll(lm_flat):
     """
     Maps vertical wrist movement to integer REL_WHEEL detents.
     dy is normalised (0–1 range), so multiply by SCROLL_SENSITIVITY
@@ -228,7 +228,7 @@ def handle_4_scroll(lm_flat):
         dy = wy - scroll_prev_y
         if abs(dy) > SCROLL_DEAD_ZONE:
             # dy > 0 = hand moved down → scroll down = negative wheel
-            clicks = -round(dy * SCROLL_SENSITIVITY)
+            clicks = -round(-dy * SCROLL_SENSITIVITY)
             _scroll(clicks)
     scroll_prev_y = wy
 
@@ -369,7 +369,7 @@ def main():
                           w, h, gesture, color)
 
                 if gesture == "4":
-                    handle_4_scroll(lm_flat)
+                    handle_scroll(lm_flat)
                     zot_prev_pos = None
                     zoom_prev_pos   = None
                 elif gesture == "Peace":
