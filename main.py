@@ -199,10 +199,15 @@ def draw_hand(img, lm, handedness_name, w, h, gesture, gesture_color):
             cv2.circle(img, (int(cx), int(cy)), 5, BLUE, -1)
 
 
-def draw_scroll_indicator(img, w, h):
+def draw_scroll_indicator(img, w):
     """Show a small indicator when 4 scroll is active."""
     cv2.putText(img, "SCROLLING", (w // 2 - 60, 60),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, GREEN, 2)
+
+def draw_click_indicator(img, w):
+    """Show a small indicator when clicked."""
+    cv2.putText(img, "CLICK", (w // 2 - 60, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, RED, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +289,10 @@ def main():
 
             # Show scrolling indicator when 4 is active
             if active_gesture == "4":
-                draw_scroll_indicator(frame, w, h)
+                draw_scroll_indicator(frame, w)
+            
+            if active_gesture == "Pinky":
+                draw_click_indicator(frame, w)
 
             cv2.putText(frame, f"Hands: {len(latest_hands)}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
