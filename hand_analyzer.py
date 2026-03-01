@@ -4,7 +4,7 @@ from collections import namedtuple, deque
 
 FINGERTIPS = {4, 8, 12, 16, 20}
 HandState = namedtuple("HandState", [
-    "gesture", "color", "openness", "distance_from_cam", "openness_history"
+    "gesture", "color", "openness", "distance_from_cam", "openness_history", "gesture_history"
 ])
 
 # ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ class HandAnalyzer:
         self._openness        = 0.0
         self._distance_from_cam = 1.0
         self._openness_history = deque(maxlen=10)
+        self._gesture_history = deque(maxlen=10)
 
         # Cache the last landmark array so helpers don't recompute it
         self._lm_xy: np.ndarray = None   # shape (21, 2), float32
@@ -71,6 +72,7 @@ class HandAnalyzer:
         self._openness             = self._calc_fist_openness_np()
         self._distance_from_cam    = self._calc_distance_np(cam_width, cam_height)
         self._openness_history.append(self._openness)
+        self._gesture_history.append(self._gesture)
 
     def get_state(self) -> HandState:
         # Pass the deque directly — avoids list() copy every frame
@@ -80,6 +82,7 @@ class HandAnalyzer:
             openness=self._openness,
             distance_from_cam=self._distance_from_cam,
             openness_history=self._openness_history,
+            gesture_history=self._gesture_history
         )
 
     # ------------------------------------------------------------------
@@ -116,6 +119,9 @@ class HandAnalyzer:
 
         if not thm and idx and mid and ring and pink:
             return "4", GREEN
+
+        elif pink and not idx and not mid and not ring:
+            return "Pinky", RED
 
         return "", WHITE
 

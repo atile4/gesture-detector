@@ -3,6 +3,7 @@ import ctypes
 import numpy as np
 import cv2
 import time
+from itertools import islice
 import pyautogui
 from collections import deque
 from types import SimpleNamespace
@@ -112,7 +113,7 @@ def inference_process(shm_frame, frame_counter, stop_flag, result_queue):
                     'color':              state.color,
                     'openness':           state.openness,
                     'distance_from_cam':  state.distance_from_cam,
-                    # openness_history dropped — main process never reads it
+                    'gesture_history':    state.gesture_history
                 })
 
         # Flush any stale result then push the fresh one
@@ -186,6 +187,11 @@ def handle_zot_mouse(lm):
 
             pyautogui.moveRel(move_x, move_y)
     zot_prev_pos = (avg_x, avg_y)
+
+def handle_zot_click(gesture_history):
+    if all(gesture == 'Zot' for gesture in islice(gesture_history, 0, len(gesture_history)-1)) and gesture_history[-1] == 'Pinky':
+        pyautogui.click()
+
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +312,8 @@ def main():
                     swipe = detect_swipe(lm, now)
                 elif gesture == "Zot":
                     handle_zot_mouse(lm)
+                elif gesture == "Pinky":
+                    handle_zot_click(hand_data['gesture_history'])
                 else:
                     wrist_history.clear()
                     zot_prev_pos = None
