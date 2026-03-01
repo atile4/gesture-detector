@@ -3,6 +3,7 @@ import ctypes
 import numpy as np
 import cv2
 import time
+from itertools import islice
 import pyautogui
 from collections import deque
 from types import SimpleNamespace
@@ -99,11 +100,12 @@ def inference_process(shm_frame, frame_counter, stop_flag, result_queue):
                 hands.append({
                     'lm': tuple(v for lm in landmarks
                                 for v in (lm.x, lm.y, lm.z)),
-                    'handedness_name':   handedness[0].category_name,
-                    'gesture':           state.gesture,
-                    'color':             state.color,
-                    'openness':          state.openness,
-                    'distance_from_cam': state.distance_from_cam,
+                    'handedness_name':    handedness[0].category_name,
+                    'gesture':            state.gesture,
+                    'color':              state.color,
+                    'openness':           state.openness,
+                    'distance_from_cam':  state.distance_from_cam,
+                    'gesture_history':    state.gesture_history
                 })
 
         while not result_queue.empty():
@@ -165,6 +167,11 @@ def handle_zot_mouse(lm):
                               int(dy * SCREEN_H * MOUSE_SENSITIVITY))
     zot_prev_pos = (avg_x, avg_y)
 
+def handle_zot_click(gesture_history):
+    if all(gesture == 'Zot' for gesture in islice(gesture_history, 0, len(gesture_history)-1)) and gesture_history[-1] == 'Pinky':
+        pyautogui.click()
+
+
 
 # ---------------------------------------------------------------------------
 # Drawing helpers
@@ -222,7 +229,7 @@ def main():
     )
     proc.start()
 
-    cap = cv2.VideoCapture(2)
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  CAP_W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAP_H)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -274,6 +281,8 @@ def main():
                 elif gesture == "Zot":
                     handle_zot_mouse(lm)
                     scroll_prev_pos = None
+                elif gesture == "Pinky":
+                    handle_zot_click(hand_data['gesture_history'])
                 else:
                     zot_prev_pos    = None
                     scroll_prev_pos = None
