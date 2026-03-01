@@ -58,7 +58,7 @@ DEAD_ZONE          = 0.005
 # SCROLL_SENSITIVITY scales that into REL_WHEEL clicks (integers).
 # REL_WHEEL=1 is one detent on a standard scroll wheel.
 # A value of 30 means a full hand sweep (~0.3 units) produces 9 wheel clicks.
-SCROLL_SENSITIVITY = 80
+SCROLL_SENSITIVITY = 8000
 SCROLL_DEAD_ZONE   = 0.003
 
 ZOOM_SENSITIVITY = 15     # should be 0.5 in arduino
@@ -270,7 +270,8 @@ def draw_hand(img, lm_flat, handedness_name, w, h, gesture, gesture_color):
     x2 = int(min(w, xy[:, 0].max() + 20))
     y2 = int(min(h, xy[:, 1].max() + 20))
     cv2.rectangle(img, (x1, y1), (x2, y2), gesture_color, 2)
-    cv2.putText(img, f"{handedness_name}: {gesture}", (x1, y1 - 10),
+    display_name = "Right" if handedness_name == "Left" else "Left"
+    cv2.putText(img, f"{display_name}: {gesture}", (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, gesture_color, 2)
 
     for (ax, ay), (bx, by) in zip(xy[_CONN_A], xy[_CONN_B]):
@@ -395,13 +396,6 @@ def main():
 
             cv2.putText(frame, f"Hands: {len(latest_hands)}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
-            for i, line in enumerate([
-                "4: index+middle+ring+pinky extended — drag up/down to scroll",
-                "Peace: index+middle — zoom (up=in, down=out)",
-                "Zot: index+pinky, others closed — moves cursor",
-            ]):
-                cv2.putText(frame, line, (10, h - 40 + i * 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, WHITE, 1)
             cv2.putText(frame, "Press Q to quit", (w - 170, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE, 1)
             cv2.imshow("Gesture Detection", frame)
