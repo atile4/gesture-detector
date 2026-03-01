@@ -33,7 +33,7 @@ DEAD_ZONE         = 0.005
 # Continuous scroll (4 gesture) settings
 # ---------------------------------------------------------------------------
 SCROLL_SENSITIVITY = 8000  # higher = faster scroll per unit of hand movement
-SCROLL_DEAD_ZONE   = 0.003  # ignore tiny movements to prevent jitter
+SCROLL_DEAD_ZONE   = 0.005  # ignore tiny movements to prevent jitter
 
 # ---------------------------------------------------------------------------
 # Pre-compute connection index arrays once at module load
@@ -120,22 +120,30 @@ def inference_process(shm_frame, frame_counter, stop_flag, result_queue):
 # Continuous scroll — trackpad style
 # ---------------------------------------------------------------------------
 
-scroll_prev_pos = None
+scroll_prev_pos = None  # now stores (x, y) tuple
 
 
-def handle_4_scroll(lm):
-    """Scroll proportionally to vertical hand movement while 4 is held."""
+def handle_scroll(lm):
+    """Scroll proportionally to hand movement while 4 is held.
+    Vertical movement scrolls up/down, horizontal scrolls left/right."""
     global scroll_prev_pos
 
+    wx = lm[0].x  # wrist x position
     wy = lm[0].y  # wrist y position
 
     if scroll_prev_pos is not None:
-        dy = wy - scroll_prev_pos
+        dx = wx - scroll_prev_pos[0]
+        dy = wy - scroll_prev_pos[1]
+
         if abs(dy) > SCROLL_DEAD_ZONE:
             # dy > 0 = hand moved down → scroll down (negative)
             pyautogui.scroll(int(-dy * SCROLL_SENSITIVITY))
 
-    scroll_prev_pos = wy
+        if abs(dx) > SCROLL_DEAD_ZONE:
+            # dx > 0 = hand moved right → scroll right (positive)
+            pyautogui.hscroll(int(dx * SCROLL_SENSITIVITY))
+
+    scroll_prev_pos = (wx, wy)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +264,7 @@ def main():
                 draw_hand(frame, lm, hand_data['handedness_name'], w, h, gesture, color)
 
                 if gesture == "4":
-                    handle_4_scroll(lm)
+                    handle_scroll(lm)
                     zot_prev_pos = None
                 elif gesture == "Zot":
                     handle_zot_mouse(lm)
