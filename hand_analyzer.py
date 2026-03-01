@@ -14,6 +14,7 @@ class HandAnalyzer:
         self._openness = None
         self._distance_from_cam = None
 
+        self._distance_from_cam_history = deque(maxlen=10)
         self._openness_history = deque(maxlen = 10) # previous 5 openness measurements
 
     # ------------------------------------------------------------------ #
@@ -50,6 +51,7 @@ class HandAnalyzer:
 
 
         self._openness_history.append(self._openness)
+        self._distance_from_cam_history.append(self._distance_from_cam)
 
     def get_state(self):
         return HandState(gesture=self._gesture, color = self._color,
