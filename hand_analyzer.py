@@ -68,6 +68,7 @@ class HandAnalyzer:
         ext = self.calc_extended_fingers(landmarks)
         count = sum(ext.values())
 
+        
         if ext["index"] and ext["middle"] and not ext["ring"] and not ext["pinky"]:
             return "Peace", PURPLE
 
@@ -84,12 +85,26 @@ class HandAnalyzer:
             return "Open Palm", GREEN
         if ext["index"] and not ext["middle"] and not ext["ring"] and not ext["pinky"]:
             return "Pointing", ORANGE
-        if ext["index"] and ext["pinky"] and not ext["middle"] and not ext["ring"]:
-            return "Rock On", YELLOW
+        if ext["index"] and ext["pinky"] and not ext["ring"]:
+            HORIZONTAL_THRESHOLD = 0.08
+            TOUCH_THRESHOLD = 0.06
+            middle_is_horizontal = abs(landmarks[12].y - landmarks[9].y) < HORIZONTAL_THRESHOLD
+            thumb_touches_pip = (
+                self._dist(landmarks[4], landmarks[6]) < TOUCH_THRESHOLD or   # index PIP
+                self._dist(landmarks[4], landmarks[10]) < TOUCH_THRESHOLD      # middle PIP
+            )
+            if middle_is_horizontal and thumb_touches_pip:
+                return "Zot", YELLOW
+            if not ext["middle"]:
+                return "Rock On", YELLOW
         if ext["index"] and ext["middle"] and ext["ring"] and not ext["pinky"]:
             return "Three", ORANGE
 
-        return f"{count} Fingers", WHITE
+        if (not ext["thumb"] and ext["index"] and ext["middle"]
+                and ext["ring"] and ext["pinky"]):
+            return "4", GREEN
+
+        return "", WHITE
 
     def calc_fist_openness(self, landmarks) -> float:
         """0.0 = fully closed, 1.0 = fully open."""
