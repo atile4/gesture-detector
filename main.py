@@ -115,12 +115,10 @@ def draw_hand(img, landmarks, handedness, w, h, gesture, gesture_color):
     for i, lm in enumerate(landmarks):
         cx, cy = int(lm.x * w), int(lm.y * h)
         if i in FINGERTIPS:
-            radius = max(1, int(8 * scale))
-            cv2.circle(img, (cx, cy), radius, RED, -1)
-            cv2.circle(img, (cx, cy), radius, WHITE, 2)
+            cv2.circle(img, (cx, cy), 8, RED, -1)
+            cv2.circle(img, (cx, cy), 8, WHITE, 2)
         else:
-            radius = max(1, int(5 * scale))
-            cv2.circle(img, (cx, cy), radius, BLUE, -1)
+            cv2.circle(img, (cx, cy), 5, BLUE, -1)
 
 
 def draw_swipe_indicator(img, swipe, w, h):
