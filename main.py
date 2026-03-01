@@ -28,6 +28,7 @@ FRAME_PIXELS     = INFER_W * INFER_H * 3
 SCREEN_W, SCREEN_H = pyautogui.size()
 MOUSE_SENSITIVITY   = 1.5
 SCROLL_AMOUNT       = 500
+DEAD_ZONE          = 0.005  # ignore movements smaller than this to reduce jitter
 
 SWIPE_HISTORY_SIZE = 15
 SWIPE_MIN_DISTANCE = 0.15
@@ -177,8 +178,13 @@ def handle_zot_mouse(lm):
     if zot_prev_pos is not None:
         dx = avg_x - zot_prev_pos[0]
         dy = avg_y - zot_prev_pos[1]
-        pyautogui.moveRel(int(dx * SCREEN_W * MOUSE_SENSITIVITY),
-                          int(dy * SCREEN_H * MOUSE_SENSITIVITY))
+
+        # Only move if outside the dead zone
+        if abs(dx) > DEAD_ZONE or abs(dy) > DEAD_ZONE:
+            move_x = int(dx * SCREEN_W * MOUSE_SENSITIVITY)
+            move_y = int(dy * SCREEN_H * MOUSE_SENSITIVITY)
+
+            pyautogui.moveRel(move_x, move_y)
     zot_prev_pos = (avg_x, avg_y)
 
 
