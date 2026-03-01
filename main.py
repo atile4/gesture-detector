@@ -157,8 +157,7 @@ def inference_process(shm_frame, frame_counter, stop_flag, result_queue):
         if det_result.hand_landmarks:
             for landmarks, handedness in zip(det_result.hand_landmarks,
                                              det_result.handedness):
-                hand_label = handedness[0].category_name
-                hand_analyzer.update_state(landmarks, INFER_W, INFER_H, hand_label)
+                hand_analyzer.update_state(landmarks, INFER_W, INFER_H)
                 state = hand_analyzer.get_state()
                 hands.append({
                     'lm': tuple(v for lm in landmarks
