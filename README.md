@@ -1,13 +1,27 @@
 # Gesture Detector
 
-A Python application for real-time webcam capture using OpenCV.
+A real-time hand gesture recognition app that maps gestures to mouse/keyboard actions using your webcam.
+
+## How It Works
+
+Camera frames are captured in the main process and written to a shared memory buffer. A separate inference process reads the buffer, runs MediaPipe hand landmark detection, classifies the gesture, and sends results back via a queue. The main process handles drawing and input events (mouse movement, scroll, zoom, click).
+
+## Gestures & Controls
+
+| Gesture | Action |
+|---------|--------|
+| **Zot** (index + pinky extended) | Mouse movement |
+| **Pinky** (pinky only extended) | Left click (when transitioning from Zot) |
+| **4** (index + middle + ring + pinky, no thumb) | Scroll |
+| **Peace** (index + middle extended) | Zoom (Ctrl + scroll) |
 
 ## Requirements
 
-- Python **3.8 through 3.11** (MediaPipe and other packages may not yet support Python 3.12+ or 3.14)
-- Webcam access
+- Python **3.8 through 3.11** (MediaPipe does not support Python 3.12+)
+- Webcam
+- `hand_landmarker.task` model file in the project root
 
-> ⚠️ **Important:** Users running Python 3.12 or 3.14 have reported import errors with MediaPipe (`module 'mediapipe' has no attribute 'solutions'`). If you encounter such issues, downgrade your interpreter to 3.11 or earlier.
+> **Note:** On Linux, `evdev` is used for low-latency kernel-level input. On macOS/Windows, the app falls back to `pyautogui`.
 
 ## Setup
 
@@ -19,15 +33,15 @@ cd gesture-detector
 
 ### 2. Create a virtual environment
 
-**On macOS/Linux:**
+**macOS/Linux:**
 ```bash
-python3 -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate
 ```
 
-**On Windows:**
+**Windows:**
 ```bash
-python -m venv venv
+py -3.11 -m venv venv
 venv\Scripts\activate
 ```
 
@@ -36,44 +50,38 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 4. Download the model
+
+Download `hand_landmarker.task` from [MediaPipe's model page](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) and place it in the project root.
+
 ## Usage
 
-**On macOS/Linux:**
 ```bash
-./venv/bin/python main.py
+python main.py
 ```
 
-**On Windows:**
+Press **Q** to quit.
+
+## Troubleshooting
+
+**MediaPipe import errors** — MediaPipe only supports Python 3.11 and earlier. Recreate your venv with the right version:
 ```bash
-venv\Scripts\python main.py
-```
-
-Press **'q'** to quit the application.
-
-### If you hit import errors
-
-MediaPipe's `solutions` API and other binaries are built for specific Python versions. On macOS, Windows and Linux, the pip wheel currently supports up through Python 3.11. Running the script with Python 3.12+ (including your system's 3.14) can lead to `ImportError`.
-
-To fix it:
-
-```bash
-# remove existing environment
 rm -rf venv
-# install with specific python binary
 python3.11 -m venv venv
-source venv/bin/activate        # or venv\Scripts\activate on Windows
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Permissions (macOS)
+**Camera permissions (macOS)** — Go to System Settings → Privacy & Security → Camera and grant access to your terminal app.
 
-On macOS, you may need to grant camera permissions:
-1. Go to **System Preferences → Security & Privacy → Camera**
-2. Add Terminal (or your terminal app) to the allowed applications
-3. Restart the application
+**Scroll not working (Linux)** — Make sure your user is in the `input` group or run with appropriate permissions for `evdev`/`UInput`.
 
-## Features
+## Project Structure
 
-- Real-time webcam feed display
-- Cross-platform support (Windows, macOS, Linux)
-- Clean exit with 'q' key
+```
+gesture-detector/
+├── main.py            # Main process: capture, display, input events
+├── hand_analyzer.py   # HandAnalyzer: gesture classification, landmark geometry
+├── colors.py          # BGR color constants
+└── hand_landmarker.task  # MediaPipe model (not included in repo)
+```
