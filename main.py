@@ -62,6 +62,9 @@ DEAD_ZONE          = 0.005
 SCROLL_SENSITIVITY = 80
 SCROLL_DEAD_ZONE   = 0.003
 
+ZOOM_SENSITIVITY = 15     # higher = faster zoom per unit of hand movement
+ZOOM_DEAD_ZONE   = 0.005
+
 # ---------------------------------------------------------------------------
 # Pre-computed connection index arrays
 # ---------------------------------------------------------------------------
@@ -181,6 +184,32 @@ def inference_process(shm_frame, frame_counter, stop_flag, result_queue):
 
 
 # ---------------------------------------------------------------------------
+# Zoom handler  (called directly from main loop — no thread needed)
+# ---------------------------------------------------------------------------
+
+zoom_prev_pos = None
+
+def handle_zoom(lm):
+    """Zoom by sending Ctrl+scroll based on vertical hand movement."""
+    global zoom_prev_pos
+
+    wy = lm[0].y  # wrist y position
+
+    if zoom_prev_pos is not None:
+        dy = wy - zoom_prev_pos
+
+        if abs(dy) > ZOOM_DEAD_ZONE:
+            # hand up (dy < 0) → zoom in (positive scroll with ctrl held)
+            # hand down (dy > 0) → zoom out (negative scroll with ctrl held)
+            clicks = int(-dy * ZOOM_SENSITIVITY / 0.01)  # scale to discrete clicks
+            if clicks != 0:
+                pyautogui.keyDown('ctrl')
+                pyautogui.scroll(clicks)
+                pyautogui.keyUp('ctrl')
+
+    zoom_prev_pos = wy
+
+# ---------------------------------------------------------------------------
 # Scroll handler  (called directly from main loop — no thread needed)
 # ---------------------------------------------------------------------------
 
@@ -260,6 +289,10 @@ def draw_scroll_indicator(img, w):
     """Show a small indicator when 4 scroll is active."""
     cv2.putText(img, "SCROLLING", (w // 2 - 60, 60),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, GREEN, 2)
+    
+def draw_zoom_indicator(img, w):
+    cv2.putText(img, "ZOOMING", (w // 2 - 50, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, PURPLE, 2)
 
 def draw_click_indicator(img, w):
     """Show a small indicator when clicked."""
@@ -272,7 +305,7 @@ def draw_click_indicator(img, w):
 # ---------------------------------------------------------------------------
 
 def main():
-    global zot_prev_pos, scroll_prev_y
+    global zot_prev_pos, scroll_prev_y, zoom_prev_pos
 
     if _EVDEV_OK:
         print("[INPUT] evdev UInput device ready — kernel-level input, no X latency")
@@ -338,25 +371,34 @@ def main():
                 if gesture == "4":
                     handle_4_scroll(lm_flat)
                     zot_prev_pos = None
+                    zoom_prev_pos   = None
+                elif gesture == "Peace":
+                    handle_zoom(lm_flat)
+                    zot_prev_pos    = None
+                    scroll_prev_pos = None
                 elif gesture == "Zot":
                     handle_zot_mouse(lm_flat)
                     scroll_prev_pos = None
+                    zoom_prev_pos   = None
                 elif gesture == "Pinky":
                     handle_zot_click(hand_data['gesture_history'])
                 else:
                     zot_prev_pos  = None
                     scroll_prev_y = None
+                    zoom_prev_pos   = None
 
             if active_gesture == "4":
                 draw_scroll_indicator(frame, w)
-            
-            if active_gesture == "Pinky":
+            elif active_gesture == "Peace":
+                draw_zoom_indicator(frame, w)
+            elif active_gesture == "Pinky":
                 draw_click_indicator(frame, w)
 
             cv2.putText(frame, f"Hands: {len(latest_hands)}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
             for i, line in enumerate([
                 "4: index+middle+ring+pinky extended — drag up/down to scroll",
+                "Peace: index+middle — zoom (up=in, down=out)",
                 "Zot: index+pinky, others closed — moves cursor",
             ]):
                 cv2.putText(frame, line, (10, h - 40 + i * 20),
