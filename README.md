@@ -27,7 +27,7 @@ Camera frames are captured in the main process and written to a shared memory bu
 
 ### 1. Clone the repository
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/atile4/gesture-detector
 cd gesture-detector
 ```
 
