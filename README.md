@@ -1,12 +1,8 @@
 # Gesture Detector
 
-A real-time hand gesture recognition app that maps gestures to mouse/keyboard actions using your webcam.
+A real-time hand gesture recognition app that uses gestures captured by the webcam to control mouse actions.
 
-## How It Works
-
-Camera frames are captured in the main process and written to a shared memory buffer. A separate inference process reads the buffer, runs MediaPipe hand landmark detection, classifies the gesture, and sends results back via a queue. The main process handles drawing and input events (mouse movement, scroll, zoom, click).
-
-## Gestures & Controls
+Right now, Gesture Detector supports:
 
 | Gesture | Action |
 |---------|--------|
@@ -61,27 +57,3 @@ python main.py
 ```
 
 Press **Q** to quit.
-
-## Troubleshooting
-
-**MediaPipe import errors** — MediaPipe only supports Python 3.11 and earlier. Recreate your venv with the right version:
-```bash
-rm -rf venv
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-**Camera permissions (macOS)** — Go to System Settings → Privacy & Security → Camera and grant access to your terminal app.
-
-**Scroll not working (Linux)** — Make sure your user is in the `input` group or run with appropriate permissions for `evdev`/`UInput`.
-
-## Project Structure
-
-```
-gesture-detector/
-├── main.py            # Main process: capture, display, input events
-├── hand_analyzer.py   # HandAnalyzer: gesture classification, landmark geometry
-├── colors.py          # BGR color constants
-└── hand_landmarker.task  # MediaPipe model (not included in repo)
-```
